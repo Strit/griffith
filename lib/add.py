@@ -305,7 +305,7 @@ def get_from_web(self):
                 self.search_movie.title = unicode(title, 'utf-8')
         # check if internet connection is available
         try:
-            urllib2.urlopen("http://www.griffith.cc")
+            urllib2.urlopen("http://www.google.com")
             if self.search_movie.search_movies(self.widgets['add']['window']):
                 self.search_movie.get_searches()
             if len(self.search_movie.ids) == 1 and o_title and title:
