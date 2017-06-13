@@ -1,8 +1,8 @@
 # -*- coding: UTF-8 -*-
 
-__revision__ = '$Id$'
+__revision__ = '$Id: PluginExportPDF.py 1533 2011-02-08 21:04:38Z iznogoud $'
 
-# Copyright (c) 2005-2013 Vasco Nunes
+# Copyright (c) 2005-2010 Vasco Nunes
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -42,34 +42,23 @@ import db
 import gutils
 import version
 from plugins.export import Base
-import logging
 
-log = logging.getLogger("Griffith")
+MediaName = {1: "DVD", 2: "DVD-R", 3: "DVD-RW", 4: "DVD+R", 5: "DVD+RW", 6: "DVD-RAM", 7: "CD", 8: "CD-RW", 9: "VCD", 10: "SVCD", 11: "VHS", 12: "BetaCAM", 13: "LaserDisc", 14: "HD DVD", 15: "Bluray"};
+#echo MediaNavn[1]
 
 class ExportPlugin(Base):
     name = "PDF"
-    description = _("PDF export plugin")
-    author = "Vasco Nunes"
-    email = "<vasco.m.nunes@gmail.com>"
-    version = "0.7"
+    description = _("PDF export plugin (revised)")
+    author = "Vasco Nunes (edited by Strit)"
+    email = "<vasco.m.nunes@gmail.com> <strit@strits.dk>"
+    version = "0.6"
 
-    fields_to_export = ('number', 'o_title', 'title', 'director', 'genre', 'cast', 'plot', 'runtime', 'year', 'notes', 'poster_md5', 'width', 'height', 'volumes.name', 'collections.name')
+    fields_to_export = ('number', 'o_title', 'title', 'director', 'genre', 'cast', 'plot', 'runtime', 'year', 'notes', 'poster_md5', 'medium_id')
 
     def initialize(self):
         self.fontName = ''
         return True
 
-    def _get_resolution(self, movie):
-        if not movie.movies_width or not movie.movies_height:
-            return ''
-        from db._movie import res_aliases
-        resolution = (movie.movies_width, movie.movies_height)
-        if resolution in res_aliases:
-            return res_aliases[resolution][0]
-        else:
-            res_string = "%dx%d" % resolution
-            return res_string
-    
     def run(self):
         """exports a simple movie list to a pdf file"""
 
@@ -93,142 +82,100 @@ class ExportPlugin(Base):
                     overwrite = False
 
             if overwrite == True or overwrite is None:
-                try:
-                    # filename encoding
-                    defaultLang, defaultEnc = getdefaultlocale()
-                    if defaultEnc is None:
-                        defaultEnc = 'UTF-8'
-                    c = SimpleDocTemplate(pdffilename.encode(defaultEnc), \
-                        author = 'Griffith', \
-                        title = _('List of films').encode('utf-8'), \
-                        subject = _('List of films').encode('utf-8'), \
-                        allowSplitting = False)
-                    # data encoding
-                    #if defaultEncoding == 'WinAnsiEncoding':
-                    #    defaultEnc = 'cp1252'
-                    #else:
-                    defaultEnc = 'utf-8'
+                # filename encoding
+                defaultLang, defaultEnc = getdefaultlocale()
+                if defaultEnc is None:
+                    defaultEnc = 'UTF-8'
+                c = SimpleDocTemplate(pdffilename.encode(defaultEnc), \
+                    author = 'Strit', \
+                    title = _('Film Liste').encode('utf-8'), \
+                    subject = _('Film Liste').encode('utf-8'))
+                # data encoding
+                #if defaultEncoding == 'WinAnsiEncoding':
+                #    defaultEnc = 'cp1252'
+                #else:
+                defaultEnc = 'utf-8'
 
-                    pdf_elements = self.config.get('pdf_elements', 'image,director,genre,cast').split(',')
+                pdf_elements = self.config.get('pdf_elements', 'image,director,genre,cast').split(',')
 
-                    self.create_styles()
-                    style = self.styles["Normal"]
-                    Story = [Spacer(1,2*inch)]
+                self.create_styles()
+                style = self.styles["Normal"]
+                Story = [Spacer(1,0*inch)]
 
-                    # select sort column - FIXME
-                    sort_column_name = self.config.get('sortby', 'number', section='mainlist')
-                    sort_reverse = self.config.get('sortby_reverse', False, section='mainlist')
-                    do_grouping = True
-                    for i in sort_column_name.split(','):
-                        if i != 'title' and i != 'o_title':
-                            do_grouping = False
+                # select sort column - FIXME
+                sort_column_name = self.config.get('sortby', 'number', section='mainlist')
+                sort_reverse = self.config.get('sortby_reverse', False, section='mainlist')
+                do_grouping = True
+                for i in sort_column_name.split(','):
+                    if i != 'title' and i != 'o_title':
+                        do_grouping = False
 
-                    # build the query
-                    query = self.get_query()
-                    movies = query.execute().fetchall()
+                # build the query
+                query = self.get_query()
+                movies = query.execute().fetchall()
 
-                    # define some custom stylesheetfont
-                    total = len(movies)
-                    p = Paragraph(saxutils.escape((_("List of films")).encode('utf-8')), self.styles["Heading1"] )
-                    Story.append(p)
-                    Story.append(Paragraph(" ",style))
-                    p = Paragraph(saxutils.escape((_("Total Movies: %s") % str(total)).encode('utf-8')), self.styles["Heading3"])
-                    Story.append(p)
-                    Story.append(Paragraph(" ",style))
-                    # output movies
-                    first_letter = ''
-                    for movie in movies:
-                        number = movie.movies_number
-                        if movie.movies_o_title:
-                            original_title = movie.movies_o_title.encode(defaultEnc)
-                        else:
-                            original_title = ''
-                        if movie.movies_title:
-                            title = movie.movies_title.encode(defaultEnc)
-                        else:
-                            title = ''
-                        grouping_title = movie.movies_title
-                        if grouping_title is None:
-                            grouping_title = u'None'
-                        if movie.movies_director:
-                            director = ' - ' + movie.movies_director.encode(defaultEnc)
-                        else:
-                            director = ""
-                        # group by first letter
-                        # use movie.title/grouping_title for grouping because of encoding problems !!!
-                        if do_grouping and grouping_title[0] != first_letter:
-                            if grouping_title[0] in '0123456789':
-                                # Group Numbers
-                                if first_letter != '0-9':
-                                    first_letter = '0-9'
-                                    paragraph_text = saxutils.escape(first_letter)
-                                    p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Heading2'])
-                                    Story.append(p)
-                            else:
-                                first_letter = grouping_title[0]
+                # define some custom stylesheetfont
+                total = len(movies)
+                p = Paragraph(saxutils.escape((_("Film Liste")).encode('utf-8')), self.styles["Heading1"] )
+                Story.append(p)
+                Story.append(Paragraph(" ",style))
+                p = Paragraph(saxutils.escape((_("Antal Film: %s") % str(total)).encode('utf-8')), self.styles["Heading3"])
+                Story.append(p)
+                Story.append(Paragraph(" ",style))
+                # output movies
+                first_letter = ''
+                for movie in movies:
+                    number = movie.number
+                    if movie.o_title:
+                        original_title = movie.o_title.encode(defaultEnc)
+                    else:
+                        original_title = ''
+                    if movie.title:
+                        title = movie.title.encode(defaultEnc)
+                    else:
+                        title = ''
+                    grouping_title = movie.title
+                    if grouping_title is None:
+                        grouping_title = u'None'
+                    if movie.director:
+                        director = ' - ' + movie.director.encode(defaultEnc)
+                    else:
+                        director = ""
+                    # group by first letter
+                    # use movie.title/grouping_title for grouping because of encoding problems !!!
+                    if do_grouping and grouping_title[0] != first_letter:
+                        if grouping_title[0] in '0123456789':
+                            # Group Numbers
+                            if first_letter != '0-9':
+                                first_letter = '0-9'
                                 paragraph_text = saxutils.escape(first_letter)
                                 p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Heading2'])
                                 Story.append(p)
-                        # add movie title
-                        paragraph_text = '<b>'+ saxutils.escape(title) + '</b>' + \
-                            saxutils.escape(' (' + original_title + ') | ' + str(number))
-                        p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Heading3'])
-                        if 'image' in pdf_elements:
-                            image_filename = None
-                            if movie.movies_poster_md5:
-                                image_filename = gutils.get_image_fname(movie.movies_poster_md5, self.db, 'm')
-                            if image_filename:
-                                p = ParagraphAndImage(p, Image(image_filename, width = 30, height = 40), side = 'left')
-                                # wrap call needed because of a bug in reportlab flowables.py - ParagraphAndImage::split(self,availWidth, availHeight)
-                                # AttributeError: ParagraphAndImage instance has no attribute 'wI'
-                                p.wrap(30, 40)
-                        Story.append(p)
-                        if 'year' in pdf_elements and movie.movies_year:
-                            paragraph_text = '<b>' + _('Year') + ': </b>' + saxutils.escape(str(movie.movies_year))
-                            p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Normal'])
+                        else:
+                            first_letter = grouping_title[0]
+                            paragraph_text = saxutils.escape(first_letter)
+                            p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Heading2'])
                             Story.append(p)
-                        if 'runtime' in pdf_elements and movie.movies_runtime:
-                            paragraph_text = '<b>' + _('Runtime') + ': </b>' + saxutils.escape(str(movie.movies_runtime))
-                            p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Normal'])
-                            Story.append(p)
-                        if 'genre' in pdf_elements and movie.movies_genre:
-                            paragraph_text = '<b>' + _('Genre') + ': </b>' + saxutils.escape(movie.movies_genre.encode(defaultEnc))
-                            p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Normal'])
-                            Story.append(p)
-                        if 'director' in pdf_elements and movie.movies_director:
-                            paragraph_text = '<i><b>' + _('Director') + ': </b>' + saxutils.escape(movie.movies_director.encode(defaultEnc)) + '</i>'
-                            p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Normal'])
-                            Story.append(p)
-                        if 'cast' in pdf_elements and movie.movies_cast:
-                            paragraph_text = '<i><b>' + _('Cast') + ': </b>' + saxutils.escape('; '.join(movie.movies_cast.encode(defaultEnc).split("\n")[0:2])) + '</i>'
-                            p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Normal'])
-                            Story.append(p)
-                        if 'plot' in pdf_elements and movie.movies_plot:
-                            paragraph_text = '<i><b>' + _('Plot') + ': </b>' + saxutils.escape(movie.movies_plot.encode(defaultEnc)) + '</i>'
-                            p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Normal'])
-                            Story.append(p)
-                        if 'notes' in pdf_elements and movie.movies_notes:
-                            paragraph_text = '<i><b>' + _('Notes') + ': </b>' + saxutils.escape(movie.movies_notes.encode(defaultEnc)) + '</i>'
-                            p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Normal'])
-                            Story.append(p)
-                        resolution = self._get_resolution(movie)
-                        if resolution:
-                            paragraph_text = '<i><b>' + _('Resolution') + ': </b>' + saxutils.escape(resolution.encode(defaultEnc)) + '</i>'
-                            p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Normal'])
-                            Story.append(p)
-                        if movie.volumes_name:
-                            paragraph_text = '<i><b>' + _('Volume') + ': </b>' + saxutils.escape(movie.volumes_name.encode(defaultEnc)) + '</i>'
-                            p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Normal'])
-                            Story.append(p)
-                        if movie.collections_name:
-                            paragraph_text = '<i><b>' + _('Collection') + ': </b>' + saxutils.escape(movie.collections_name.encode(defaultEnc)) + '</i>'
-                            p = Paragraph(paragraph_text.decode(defaultEnc), self.styles['Normal'])
-                            Story.append(p)
-                    c.build(Story, onFirstPage=self.page_template, onLaterPages=self.page_template)
-                    gutils.info(_('PDF has been created.'), self.parent_window)
-                except Exception, e:
-                    log.exception('')
-                    gutils.error(str(e))
+                    # add movie title
+                    paragraph_text = '<b>' + _('Title') + ': </b>' + saxutils.escape(title) + '<br />' + \
+                        '<b>' + _('Original Title') + ': </b>' + saxutils.escape(original_title) + '<br />'
+                    paragraph_text = paragraph_text + '<b>' + _('Year') + ': </b>' + saxutils.escape(str(movie.year)) + '<br />'
+                    paragraph_text = paragraph_text + '<b>' + _('Runtime') + ': </b>' + saxutils.escape(str(movie.runtime)) + '<br />'
+                    paragraph_text = paragraph_text + '<b>' + _('Media') + ': </b>' + saxutils.escape(MediaName[movie.medium_id]) + '<br />' + '<br />'
+                    p = Paragraph(paragraph_text, self.styles['Normal'])
+                                        
+                    if 'image' in pdf_elements:
+                        image_filename = None
+                        if movie.poster_md5:
+                            image_filename = gutils.get_image_fname(movie.poster_md5, self.db, 'm')
+                        if image_filename:
+                            p = ParagraphAndImage(p, Image(image_filename, width = 30, height = 40), side = 'left')
+                            # wrap call needed because of a bug in reportlab flowables.py - ParagraphAndImage::split(self,availWidth, availHeight)
+                            # AttributeError: ParagraphAndImage instance has no attribute 'wI'
+                            p.wrap(30, 40)
+                    Story.append(p)
+                c.build(Story, onFirstPage=self.page_template, onLaterPages=self.page_template)
+                gutils.info(_('PDF has been created.'), self.parent_window)
 
     def create_styles(self):
         self.styles = getSampleStyleSheet()
@@ -238,25 +185,20 @@ class ExportPlugin(Base):
             fontfilename = self.config.get('font', '')
             (fontfilenamebase, fontfilenameextension) = os.path.splitext(fontfilename)
 
-            try:
-                pdfmetrics.registerFont(TTFont(self.fontName, fontfilename))
-            except:
-                log.exception('')
-                self.fontName = "Helvetica"
-            else:
-                addMapping(self.fontName, 0, 0, self.fontName)
-                # build font family if available to support <b> and <i>
-                if os.path.isfile(fontfilenamebase + 'bd' + fontfilenameextension):
-                    pdfmetrics.registerFont(TTFont(self.fontName + '-bold', fontfilenamebase + 'bd' + fontfilenameextension))
-                    addMapping(self.fontName, 1, 0, self.fontName + '-bold')
-                if os.path.isfile(fontfilenamebase + 'bi' + fontfilenameextension):
-                    pdfmetrics.registerFont(TTFont(self.fontName + '-bolditalic', fontfilenamebase + 'bi' + fontfilenameextension))
-                    addMapping(self.fontName, 1, 1, self.fontName + '-bolditalic')
-                if os.path.isfile(fontfilenamebase + 'i' + fontfilenameextension):
-                    pdfmetrics.registerFont(TTFont(self.fontName + '-italic', fontfilenamebase + 'i' + fontfilenameextension))
-                    addMapping(self.fontName, 0, 1, self.fontName + '-italic')
+            pdfmetrics.registerFont(TTFont(self.fontName, fontfilename))
+            addMapping(self.fontName, 0, 0, self.fontName)
+            # build font family if available to support <b> and <i>
+            if os.path.isfile(fontfilenamebase + 'bd' + fontfilenameextension):
+                pdfmetrics.registerFont(TTFont(self.fontName + '-bold', fontfilenamebase + 'bd' + fontfilenameextension))
+                addMapping(self.fontName, 1, 0, self.fontName + '-bold')
+            if os.path.isfile(fontfilenamebase + 'bi' + fontfilenameextension):
+                pdfmetrics.registerFont(TTFont(self.fontName + '-bolditalic', fontfilenamebase + 'bi' + fontfilenameextension))
+                addMapping(self.fontName, 1, 1, self.fontName + '-bolditalic')
+            if os.path.isfile(fontfilenamebase + 'i' + fontfilenameextension):
+                pdfmetrics.registerFont(TTFont(self.fontName + '-italic', fontfilenamebase + 'i' + fontfilenameextension))
+                addMapping(self.fontName, 0, 1, self.fontName + '-italic')
         else:
-            self.fontName = "Helvetica"
+            self.fontName = "Ubuntu"
 
         if self.config.get('font_size', '') != '':
             self.base_font_size = int(self.config.get('font_size'))

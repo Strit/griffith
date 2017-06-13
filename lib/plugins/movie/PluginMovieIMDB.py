@@ -2,7 +2,7 @@
 
 __revision__ = '$Id$'
 
-# Copyright (c) 2005-2013 Vasco Nunes, Piotr Ożarowski
+# Copyright (c) 2005-2013 Vasco Nunes, Piotr OÅ¼arowski
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,6 +21,9 @@ __revision__ = '$Id$'
 # You may use and distribute this software under the terms of the
 # GNU General Public License, version 2 or later
 
+# Edited by Peter Munch-Ellingsen and Dan Johansen
+# Puplished by Dan Johansen
+
 import gutils, movie
 import string, re
 
@@ -28,7 +31,7 @@ plugin_name         = 'IMDb'
 plugin_description  = 'Internet Movie Database'
 plugin_url          = 'www.imdb.com'
 plugin_language     = _('English')
-plugin_author       = 'Vasco Nunes, Piotr Ożarowski'
+plugin_author       = 'Vasco Nunes, Piotr OÅ¼arowski'
 plugin_author_email = 'griffith@griffith.cc'
 plugin_version      = '1.15'
 
@@ -45,19 +48,21 @@ class Plugin(movie.Movie):
         self.tagl_page = self.open_page(url=self.url + '/taglines')
 
     def get_image(self):
-        tmp = gutils.trim(self.page, 'id="img_primary"', '</a>')
+        tmp = gutils.trim(self.page, '<div class="poster">', '</div>')
+        image_link = gutils.trim(tmp, '<a href="', '"')
+        poster_page = self.open_page(url='http://www.imdb.com' + image_link)
+#        tmp = gutils.trim(poster_page, '<div class="photo">', '</div>')
         self.image_url = gutils.trim(tmp, 'src="', '"')
 
     def get_o_title(self):
-        self.o_title = gutils.regextrim(self.page, 'class="title-extra"[^>]*>', '<')
+        self.o_title = gutils.regextrim(self.page, 'class="title-extra">', '<')
         if not self.o_title:
-            self.o_title = gutils.regextrim(self.page, '<h1>', '([ ]|[&][#][0-9]+[;])<span')
+            self.o_title = gutils.regextrim(self.page, '<h1 itemprop="name" class>', '([ ]|[&][#][0-9]+[;])<span')
         if not self.o_title:
             self.o_title = re.sub(' [(].*', '', gutils.trim(self.page, '<title>', '</title>'))
-        self.o_title = re.sub('"', '', self.o_title)
 
     def get_title(self):    # same as get_o_title()
-        self.title = gutils.regextrim(self.page, '<h1>', '([ ]|[&][#][0-9]+[;])<span')
+        self.title = gutils.regextrim(self.page, '<h1 itemprop="name" class>', '([ ]|[&][#][0-9]+[;])<span')
         if not self.title:
             self.title = re.sub(' [(].*', '', gutils.trim(self.page, '<title>', '</title>'))
 
@@ -143,17 +148,22 @@ class Plugin(movie.Movie):
         self.country = re.sub('[ ]+', ' ', re.sub('[\n]+', '', self.country))
 
     def get_rating(self):
-        pattern = re.compile('>([0-9]([.][0-9])*)(<[^>]+>)+[/](<[^>]+>)[0-9][0-9]<')
-        result = pattern.search(self.page)
-        if result:
-            self.rating = result.groups()[0]
-            if self.rating:
-                try:
-                    self.rating = round(float(self.rating), 0)
-                except Exception, e:
-                    self.rating = 0
-        else:
-            self.rating = 0
+#        pattern = re.compile('>([0-9]([.][0-9])*)(<[^>]+>)+[/](<[^>]+>)[0-9][0-9]<')
+#        result = pattern.search(self.page)
+#        if result:
+#            self.rating = result.groups()[0]
+#            if self.rating:
+#                try:
+#                    self.rating = round(float(self.rating), 0)
+#                except Exception, e:
+#                    self.rating = 0
+        tmp = gutils.trim(self.page, '<div class="ratingValue">', '</div>')
+#        image_link = gutils.trim(tmp, '<a href="', '"')
+        poster_page = self.open_page(url='http://www.imdb.com')
+#        tmp = gutils.trim(poster_page, '<div class="photo">', '</div>')
+        self.rating = gutils.trim(tmp, '<span itemprop="ratingValue">', '</span>')
+#        else:
+#            self.rating = 0
 
     def get_notes(self):
         self.notes = ''
@@ -274,7 +284,7 @@ class SearchPluginTest(SearchPlugin):
     #
     test_configuration = {
         'Rocky Balboa'         : [ 10, 10 ],
-        'Ein glückliches Jahr' : [ 3, 3 ]
+        'Ein glÃ¼ckliches Jahr' : [ 3, 3 ]
     }
 
 class PluginTest:
