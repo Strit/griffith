@@ -157,7 +157,7 @@ class Movie(object):
             #
             if self.progress is None:
                 self.progress = Progress(parent_window)
-            self.progress.set_data(parent_window, _("Checking connection"), _("Fetching data"), _("Wait a moment"), True)
+            self.progress.set_data(parent_window, _("Checking connection"), _("Wait a moment"), True)
             #
             # check for internet connection
             #
